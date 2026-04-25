@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BadgeCheck,
+  BellRing,
   Boxes,
   Clock,
   MapPin,
@@ -14,10 +15,11 @@ import {
   Star,
 } from "lucide-react";
 import type { Fabric, Supplier } from "@/lib/types";
-import { formatLeadTime, formatNaira } from "@/lib/utils";
+import { cn, formatLeadTime, formatNaira } from "@/lib/utils";
 import { HeritageBadge } from "./HeritageBadge";
 import { PaletteSwatches } from "./PaletteSwatches";
 import { InquiryDialog } from "./InquiryDialog";
+import { InterestDialog } from "./InterestDialog";
 import { FabricCard } from "./FabricCard";
 import { FabricArtwork } from "./FabricArtwork";
 
@@ -33,6 +35,20 @@ export function FabricDetailClient({
   relatedSupplierIndex: Record<string, Supplier>;
 }) {
   const [open, setOpen] = useState(false);
+  const [interestOpen, setInterestOpen] = useState(false);
+
+  const stockLevel: "out" | "low" | "ok" =
+    fabric.inStockYards < fabric.minOrderYards
+      ? "out"
+      : fabric.inStockYards < fabric.minOrderYards * 3
+        ? "low"
+        : "ok";
+  const stockTone =
+    stockLevel === "out"
+      ? "text-terracotta-700"
+      : stockLevel === "low"
+        ? "text-terracotta-600"
+        : "text-charcoal-900";
 
   return (
     <div className="container-page py-10">
@@ -90,6 +106,7 @@ export function FabricDetailClient({
                 icon={<PackageCheck className="h-3.5 w-3.5" />}
                 label="In stock"
                 value={`${fabric.inStockYards} yds`}
+                valueClassName={stockTone}
               />
               <Stat
                 icon={<Clock className="h-3.5 w-3.5" />}
@@ -116,18 +133,63 @@ export function FabricDetailClient({
                 ))}
               </div>
             </div>
+            {stockLevel !== "ok" && (
+              <div
+                className={cn(
+                  "flex flex-col gap-1 rounded-2xl border px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between",
+                  stockLevel === "out"
+                    ? "border-terracotta-100 bg-terracotta-50 text-terracotta-700"
+                    : "border-cream-200 bg-cream-100 text-terracotta-700",
+                )}
+              >
+                <p className="font-medium">
+                  {stockLevel === "out"
+                    ? `Below MOQ — only ${fabric.inStockYards} yards on the shelf.`
+                    : `Limited stock — ${fabric.inStockYards} yards left, ${fabric.minOrderYards} MOQ.`}
+                </p>
+                <p className="text-[11px] text-charcoal-700/80 sm:text-right">
+                  Express interest and the producer plans the next run around
+                  it.
+                </p>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="btn-primary"
-              >
-                <Send className="h-4 w-4" /> Send inquiry
-              </button>
-              <Link
-                href={`/match`}
-                className="btn-ghost"
-              >
+              {stockLevel === "out" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInterestOpen(true)}
+                    className="btn-terracotta"
+                  >
+                    <BellRing className="h-4 w-4" /> Notify me & producer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="btn-ghost"
+                  >
+                    <Send className="h-4 w-4" /> Send inquiry anyway
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="btn-primary"
+                  >
+                    <Send className="h-4 w-4" /> Send inquiry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInterestOpen(true)}
+                    className="btn-ghost"
+                  >
+                    <BellRing className="h-4 w-4" /> Express interest
+                  </button>
+                </>
+              )}
+              <Link href={`/match`} className="btn-ghost">
                 <Sparkles className="h-4 w-4" /> Find similar by mood
               </Link>
             </div>
@@ -196,6 +258,13 @@ export function FabricDetailClient({
         fabric={fabric}
         supplier={supplier}
       />
+      <InterestDialog
+        open={interestOpen}
+        onClose={() => setInterestOpen(false)}
+        fabric={fabric}
+        supplier={supplier}
+        shortfallContext={stockLevel === "out"}
+      />
     </div>
   );
 }
@@ -204,10 +273,12 @@ function Stat({
   icon,
   label,
   value,
+  valueClassName,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  valueClassName?: string;
 }) {
   return (
     <div>
@@ -215,7 +286,14 @@ function Stat({
         {icon}
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-medium text-charcoal-900">{value}</dd>
+      <dd
+        className={cn(
+          "mt-1 text-sm font-medium text-charcoal-900",
+          valueClassName,
+        )}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
