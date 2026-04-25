@@ -154,6 +154,11 @@ npm run start    # Run the production build locally
 npm run lint     # ESLint
 ```
 
+### Troubleshooting
+
+- **`Watchpack Error (watcher): EMFILE: too many open files` on macOS, all routes 404.** The OS file-descriptor budget for `fs.watch` got exhausted (often by other watchers — Cursor agents, Spotlight, etc.) and Next.js silently dropped half the route manifest. Either copy `.env.example` to `.env.local` (which sets `WATCHPACK_POLLING=true` and `CHOKIDAR_USEPOLLING=1` to switch to polling), or run `WATCHPACK_POLLING=true npm run dev` ad-hoc. Polling adds a small CPU cost but is bulletproof.
+- **`Couldn't find any 'pages' or 'app' directory`** — make sure `npm run dev` is invoked from inside `Bypic/`, not the parent directory.
+
 ## Environment configuration
 
 Copy `.env.example` to `.env.local` (or set in Vercel project settings):
