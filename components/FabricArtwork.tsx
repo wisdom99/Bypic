@@ -11,7 +11,9 @@ interface FabricArtworkProps {
 
 /**
  * Renders a procedural SVG fabric artwork from a palette + heritage.
- * Built so the prototype never relies on external image hosting.
+ * Designed so the prototype never relies on external image hosting,
+ * and each heritage has a visually distinct, recognisable signature
+ * inspired by real Adire, Ankara, Aso-oke, Akwete, Kente and lace.
  */
 export function FabricArtwork({
   palette,
@@ -34,30 +36,34 @@ export function FabricArtwork({
       <defs>
         <linearGradient id={`bg-${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor={colors[0]} />
-          <stop offset="55%" stopColor={colors[1]} />
-          <stop offset="100%" stopColor={colors[3]} />
+          <stop offset="55%" stopColor={shade(colors[0], -0.06)} />
+          <stop offset="100%" stopColor={shade(colors[0], -0.14)} />
         </linearGradient>
         <filter id={`grain-${id}`}>
-          <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" />
-          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0" />
+          <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed={hashSeed(seed)} />
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.07 0" />
           <feComposite in2="SourceGraphic" operator="in" />
         </filter>
+        <filter id={`weave-${id}`}>
+          <feTurbulence type="fractalNoise" baseFrequency="0.9 0.06" numOctaves="1" seed={hashSeed(seed) + 3} />
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0" />
+          <feComposite in2="SourceGraphic" operator="in" />
+        </filter>
+        <radialGradient id={`vignette-${id}`} cx="50%" cy="50%" r="75%">
+          <stop offset="60%" stopColor="black" stopOpacity="0" />
+          <stop offset="100%" stopColor="black" stopOpacity="0.35" />
+        </radialGradient>
       </defs>
-      <rect
-        x="0"
-        y="0"
-        width="400"
-        height="500"
-        fill={`url(#bg-${id})`}
-      />
+      <rect x="0" y="0" width="400" height="500" fill={`url(#bg-${id})`} />
       {renderHeritage(heritage, colors, id, seed)}
+      <rect x="0" y="0" width="400" height="500" filter={`url(#grain-${id})`} opacity="0.65" />
       <rect
         x="0"
         y="0"
         width="400"
         height="500"
-        filter={`url(#grain-${id})`}
-        opacity="0.7"
+        fill={`url(#vignette-${id})`}
+        opacity="0.55"
       />
     </svg>
   );
@@ -77,13 +83,39 @@ function stableId(input: string): string {
   return Math.abs(h).toString(36);
 }
 
+function hashSeed(input: string): number {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = (h * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h % 9999);
+}
+
 function rng(seed: string) {
   let s = 0;
   for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  if (s === 0) s = 1;
   return () => {
     s = (s * 9301 + 49297) % 233280;
     return s / 233280;
   };
+}
+
+/** Mix-and-shade helpers (work on hex). */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(v, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHex(r: number, g: number, b: number) {
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+function shade(hex: string, amt: number) {
+  const [r, g, b] = hexToRgb(hex);
+  const k = 1 + amt;
+  return rgbToHex(r * k, g * k, b * k);
 }
 
 function renderHeritage(
@@ -98,21 +130,23 @@ function renderHeritage(
     case "Ankara":
       return <AnkaraPattern colors={c} id={id} seed={seed} />;
     case "Aso-oke":
-      return <AsoOkePattern colors={c} />;
+      return <AsoOkePattern colors={c} id={id} seed={seed} />;
     case "Akwete":
-      return <AkwetePattern colors={c} />;
+      return <AkwetePattern colors={c} id={id} />;
     case "Kente":
-      return <KentePattern colors={c} />;
+      return <KentePattern colors={c} id={id} />;
     case "Lace":
       return <LacePattern colors={c} id={id} />;
     case "Cotton":
-      return <CottonPattern colors={c} seed={seed} />;
+      return <CottonPattern colors={c} id={id} seed={seed} />;
     case "Linen":
-      return <LinenPattern colors={c} />;
+      return <LinenPattern colors={c} id={id} />;
     default:
       return null;
   }
 }
+
+/* -------------------- Adire: indigo resist on cream  -------------------- */
 
 function AdirePattern({
   colors,
@@ -124,41 +158,143 @@ function AdirePattern({
   seed: string;
 }) {
   const rand = rng(seed + "adire");
-  const blobs = Array.from({ length: 18 }).map((_, i) => ({
-    cx: rand() * 400,
-    cy: rand() * 500,
-    r: 30 + rand() * 70,
-    fill: colors[i % 3],
-    opacity: 0.18 + rand() * 0.18,
-  }));
+  const resist = pickLight(colors);
+  const accent = pickAccent(colors, resist);
+
+  // Grid of "ibadandun" cells, each filled with a different resist motif.
+  const cols = 4;
+  const rows = 5;
+  const cellW = 400 / cols;
+  const cellH = 500 / rows;
+  const cells: React.ReactNode[] = [];
+  let i = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let cIdx = 0; cIdx < cols; cIdx++) {
+      const variant = Math.floor(rand() * 4);
+      const cx = cIdx * cellW + cellW / 2;
+      const cy = r * cellH + cellH / 2;
+      const motif = adireMotif(variant, cx, cy, cellW, cellH, resist, accent);
+      cells.push(<g key={`cell-${i++}`}>{motif}</g>);
+    }
+  }
+
+  // Bleed/halo behind the grid for hand-dyed feel.
+  const halos = Array.from({ length: 6 }).map((_, k) => (
+    <circle
+      key={`halo-${k}`}
+      cx={rand() * 400}
+      cy={rand() * 500}
+      r={70 + rand() * 60}
+      fill={colors[1]}
+      opacity={0.18}
+      filter={`url(#blur-${id})`}
+    />
+  ));
+
   return (
     <>
-      <g filter={`url(#blur-${id})`}>
-        {blobs.map((b, i) => (
-          <circle key={i} {...b} />
-        ))}
-      </g>
       <defs>
         <filter id={`blur-${id}`}>
-          <feGaussianBlur stdDeviation="14" />
+          <feGaussianBlur stdDeviation="22" />
         </filter>
       </defs>
-      {Array.from({ length: 14 }).map((_, i) => (
-        <circle
-          key={`s-${i}`}
-          cx={rand() * 400}
-          cy={rand() * 500}
-          r={2 + rand() * 4}
-          fill={colors[4]}
-          opacity={0.6}
-        />
-      ))}
+      {halos}
+      {/* Faint stencil grid lines */}
+      <g stroke={resist} strokeWidth="0.6" opacity="0.18">
+        {Array.from({ length: cols + 1 }).map((_, k) => (
+          <line key={`gv-${k}`} x1={k * cellW} y1="0" x2={k * cellW} y2="500" />
+        ))}
+        {Array.from({ length: rows + 1 }).map((_, k) => (
+          <line key={`gh-${k}`} x1="0" y1={k * cellH} x2="400" y2={k * cellH} />
+        ))}
+      </g>
+      {cells}
     </>
   );
 }
 
+function adireMotif(
+  variant: number,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  resist: string,
+  accent: string,
+): React.ReactNode {
+  const r = Math.min(w, h) * 0.36;
+  const stroke = { stroke: resist, strokeWidth: 1.4, fill: "none", opacity: 0.85 };
+  switch (variant) {
+    case 0: {
+      // Concentric rings (tie-dye)
+      return (
+        <g>
+          {[r, r * 0.75, r * 0.5, r * 0.25].map((rr, i) => (
+            <circle key={i} cx={cx} cy={cy} r={rr} {...stroke} />
+          ))}
+          <circle cx={cx} cy={cy} r="2.5" fill={accent} />
+        </g>
+      );
+    }
+    case 1: {
+      // Eight-point starburst
+      const pts: string[] = [];
+      for (let a = 0; a < 16; a++) {
+        const ang = (a / 16) * Math.PI * 2;
+        const len = a % 2 === 0 ? r : r * 0.45;
+        pts.push(`${cx + Math.cos(ang) * len},${cy + Math.sin(ang) * len}`);
+      }
+      return (
+        <g>
+          <polygon points={pts.join(" ")} {...stroke} />
+          <circle cx={cx} cy={cy} r={r * 0.18} fill={resist} opacity="0.55" />
+        </g>
+      );
+    }
+    case 2: {
+      // 3×3 dot grid (eleko stencil)
+      const dots: React.ReactNode[] = [];
+      for (let yi = -1; yi <= 1; yi++) {
+        for (let xi = -1; xi <= 1; xi++) {
+          dots.push(
+            <circle
+              key={`d-${yi}-${xi}`}
+              cx={cx + xi * (r * 0.6)}
+              cy={cy + yi * (r * 0.6)}
+              r={r * 0.13}
+              fill={resist}
+              opacity={(xi + yi) % 2 === 0 ? 0.85 : 0.45}
+            />,
+          );
+        }
+      }
+      return <g>{dots}</g>;
+    }
+    default: {
+      // Half-moon / leaf "moon-adire" motif
+      return (
+        <g>
+          <path
+            d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+            {...stroke}
+          />
+          <path
+            d={`M ${cx - r * 0.6} ${cy} A ${r * 0.6} ${r * 0.6} 0 0 1 ${cx + r * 0.6} ${cy}`}
+            {...stroke}
+          />
+          <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} {...stroke} />
+          <circle cx={cx} cy={cy + r * 0.4} r="2" fill={accent} />
+        </g>
+      );
+    }
+  }
+}
+
+/* -------------------- Ankara: bold wax-print silhouettes -------------------- */
+
 function AnkaraPattern({
   colors,
+  id,
   seed,
 }: {
   colors: string[];
@@ -166,192 +302,494 @@ function AnkaraPattern({
   seed: string;
 }) {
   const rand = rng(seed + "ankara");
-  const tile = 80;
-  const cells = [];
-  for (let y = 0; y < 500 + tile; y += tile) {
-    for (let x = 0; x < 400 + tile; x += tile) {
-      const variant = Math.floor(rand() * 4);
-      cells.push({ x, y, variant });
-    }
-  }
+  // Big repeating "Vlisco eye": concentric scalloped petals
+  const eyes: React.ReactNode[] = [];
+  const positions = [
+    { x: 110, y: 130 },
+    { x: 290, y: 90 },
+    { x: 90, y: 320 },
+    { x: 300, y: 290 },
+    { x: 200, y: 460 },
+  ];
+  positions.forEach((p, i) => {
+    const radius = 70 + rand() * 30;
+    eyes.push(<VliscoEye key={`eye-${i}`} cx={p.x} cy={p.y} r={radius} colors={colors} variant={i % 3} />);
+  });
+
+  // Background scattered seed dots and crackle lines (wax craquelure)
+  const cracks = Array.from({ length: 14 }).map((_, i) => {
+    const x1 = rand() * 400;
+    const y1 = rand() * 500;
+    const x2 = x1 + (rand() - 0.5) * 90;
+    const y2 = y1 + (rand() - 0.5) * 90;
+    return (
+      <line
+        key={`crack-${i}`}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={colors[3]}
+        strokeWidth="0.7"
+        opacity="0.35"
+      />
+    );
+  });
+
   return (
-    <g>
-      {cells.map((cell, i) => (
-        <g key={i} transform={`translate(${cell.x} ${cell.y})`}>
-          {cell.variant === 0 && (
-            <circle cx={tile / 2} cy={tile / 2} r={tile / 3} fill={colors[2]} opacity="0.5" />
-          )}
-          {cell.variant === 1 && (
-            <path
-              d={`M ${tile / 2} 5 L ${tile - 5} ${tile - 5} L 5 ${tile - 5} Z`}
-              fill={colors[3]}
-              opacity="0.45"
-            />
-          )}
-          {cell.variant === 2 && (
-            <rect x={tile / 4} y={tile / 4} width={tile / 2} height={tile / 2} fill={colors[1]} opacity="0.4" transform={`rotate(45 ${tile / 2} ${tile / 2})`} />
-          )}
-          {cell.variant === 3 && (
-            <g stroke={colors[2]} strokeWidth="3" fill="none" opacity="0.55">
-              <path d={`M 0 ${tile / 2} Q ${tile / 2} 0 ${tile} ${tile / 2}`} />
-              <path d={`M 0 ${tile / 2} Q ${tile / 2} ${tile} ${tile} ${tile / 2}`} />
-            </g>
-          )}
-        </g>
-      ))}
+    <g filter={`url(#weave-${id})`}>
+      {cracks}
+      {eyes}
     </g>
   );
 }
 
-function AsoOkePattern({ colors }: { colors: string[] }) {
-  const stripes = [];
+function VliscoEye({
+  cx,
+  cy,
+  r,
+  colors,
+  variant,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  colors: string[];
+  variant: number;
+}) {
+  const petals = 12;
+  const ring1: string[] = [];
+  const ring2: string[] = [];
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2;
+    const x1 = cx + Math.cos(a) * r;
+    const y1 = cy + Math.sin(a) * r;
+    const x2 = cx + Math.cos(a + Math.PI / petals) * r * 0.78;
+    const y2 = cy + Math.sin(a + Math.PI / petals) * r * 0.78;
+    ring1.push(`${x1},${y1}`);
+    ring2.push(`${x2},${y2}`);
+  }
+  const points: string[] = [];
+  for (let i = 0; i < petals; i++) {
+    points.push(ring1[i]);
+    points.push(ring2[i]);
+  }
+  const fillA = colors[2];
+  const fillB = colors[3];
+  const fillC = colors[1];
+
+  return (
+    <g>
+      {/* Outer scalloped petal */}
+      <polygon points={points.join(" ")} fill={fillA} opacity="0.92" />
+      {/* Middle ring */}
+      <circle cx={cx} cy={cy} r={r * 0.62} fill={fillB} opacity="0.95" />
+      {/* Inner core */}
+      {variant === 0 && <circle cx={cx} cy={cy} r={r * 0.32} fill={fillC} />}
+      {variant === 1 && (
+        <>
+          <circle cx={cx} cy={cy} r={r * 0.32} fill={fillC} />
+          <circle cx={cx} cy={cy} r={r * 0.18} fill={fillA} />
+        </>
+      )}
+      {variant === 2 && (
+        <g>
+          <circle cx={cx} cy={cy} r={r * 0.34} fill={fillC} />
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i / 8) * Math.PI * 2;
+            return (
+              <circle
+                key={i}
+                cx={cx + Math.cos(a) * r * 0.34}
+                cy={cy + Math.sin(a) * r * 0.34}
+                r={r * 0.07}
+                fill={fillA}
+                opacity="0.85"
+              />
+            );
+          })}
+        </g>
+      )}
+      {/* Spoke radii */}
+      <g stroke={fillC} strokeWidth="1.2" opacity="0.55">
+        {Array.from({ length: 12 }).map((_, i) => {
+          const a = (i / 12) * Math.PI * 2;
+          return (
+            <line
+              key={i}
+              x1={cx + Math.cos(a) * r * 0.35}
+              y1={cy + Math.sin(a) * r * 0.35}
+              x2={cx + Math.cos(a) * r * 0.6}
+              y2={cy + Math.sin(a) * r * 0.6}
+            />
+          );
+        })}
+      </g>
+    </g>
+  );
+}
+
+/* -------------------- Aso-oke: strip-loom warp + weft  -------------------- */
+
+function AsoOkePattern({
+  colors,
+  id,
+  seed,
+}: {
+  colors: string[];
+  id: string;
+  seed: string;
+}) {
+  const rand = rng(seed + "asooke");
+  const stripCount = 3;
+  const stripW = 400 / stripCount;
+  const items: React.ReactNode[] = [];
+  // Vertical strip seams (slightly darker base, with a thin gap line)
+  for (let s = 0; s < stripCount; s++) {
+    const tone = s % 2 === 0 ? shade(colors[0], -0.04) : shade(colors[0], 0.02);
+    items.push(
+      <rect
+        key={`strip-${s}`}
+        x={s * stripW}
+        y={0}
+        width={stripW}
+        height={500}
+        fill={tone}
+      />,
+    );
+  }
+  // Strip seams
+  for (let s = 1; s < stripCount; s++) {
+    items.push(
+      <line
+        key={`seam-${s}`}
+        x1={s * stripW}
+        y1={0}
+        x2={s * stripW}
+        y2={500}
+        stroke={shade(colors[0], -0.18)}
+        strokeWidth="2"
+      />,
+    );
+  }
+  // Horizontal pinstripes (warp threads). Cluster densely in places.
   let y = 0;
   let i = 0;
   while (y < 500) {
-    const h = 18 + ((i * 7) % 22);
-    const fill = colors[i % colors.length];
-    stripes.push(<rect key={i} x="0" y={y} width="400" height={h} fill={fill} />);
-    if (i % 3 === 0) {
-      stripes.push(
-        <rect
-          key={`m-${i}`}
-          x="0"
-          y={y + h - 2}
-          width="400"
-          height="2"
-          fill={colors[3]}
-          opacity="0.6"
+    const isWide = i % 11 === 0;
+    const isMetal = i % 5 === 0;
+    const h = isWide ? 6 + rand() * 6 : 1.4;
+    const fill = isWide
+      ? colors[1]
+      : isMetal
+        ? colors[3]
+        : shade(colors[0], 0.06);
+    items.push(
+      <rect
+        key={`hs-${i}`}
+        x="0"
+        y={y}
+        width="400"
+        height={h}
+        fill={fill}
+        opacity={isWide ? 0.95 : isMetal ? 0.85 : 0.55}
+      />,
+    );
+    y += h + (isWide ? 8 + rand() * 6 : 3);
+    i++;
+  }
+  // Diamond/lozenge motifs on a couple of bands (shuku)
+  const motifBands = [180, 360];
+  motifBands.forEach((by, bi) => {
+    for (let mx = 30; mx < 400; mx += 60) {
+      items.push(
+        <polygon
+          key={`dm-${bi}-${mx}`}
+          points={`${mx},${by} ${mx + 14},${by + 12} ${mx},${by + 24} ${mx - 14},${by + 12}`}
+          fill="none"
+          stroke={colors[3]}
+          strokeWidth="1.4"
+          opacity="0.85"
         />,
       );
     }
-    y += h;
-    i++;
-  }
-  return <g>{stripes}</g>;
+  });
+
+  return <g filter={`url(#weave-${id})`}>{items}</g>;
 }
 
-function AkwetePattern({ colors }: { colors: string[] }) {
-  const cell = 50;
+/* -------------------- Akwete: diamond-and-stripe Igbo weave -------------------- */
+
+function AkwetePattern({ colors, id }: { colors: string[]; id: string }) {
   const items: React.ReactNode[] = [];
-  for (let y = 0; y < 500; y += cell) {
-    for (let x = 0; x < 400; x += cell) {
-      const isAlt = ((x / cell + y / cell) % 2) === 0;
-      const fill = isAlt ? colors[2] : colors[1];
+  // Vertical column structure
+  const cols = 6;
+  const colW = 400 / cols;
+  for (let c = 0; c < cols; c++) {
+    const tone = c % 2 === 0 ? shade(colors[1], -0.05) : shade(colors[2], -0.03);
+    items.push(<rect key={`col-${c}`} x={c * colW} y={0} width={colW} height={500} fill={tone} />);
+  }
+  // Diamond motifs in alternating columns
+  for (let c = 0; c < cols; c++) {
+    const isMotif = c % 2 === 1;
+    if (!isMotif) continue;
+    for (let y = 30; y < 500; y += 70) {
+      const cx = c * colW + colW / 2;
+      const cy = y;
+      const r = 18;
       items.push(
-        <g key={`${x}-${y}`} transform={`translate(${x} ${y})`}>
-          <rect width={cell} height={cell} fill={fill} opacity="0.85" />
-          <path
-            d={`M 0 ${cell / 2} L ${cell / 2} 0 L ${cell} ${cell / 2} L ${cell / 2} ${cell} Z`}
-            fill={colors[0]}
-            opacity="0.55"
+        <g key={`d-${c}-${y}`}>
+          <polygon
+            points={`${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`}
+            fill={colors[3]}
+            opacity="0.95"
           />
-          <circle cx={cell / 2} cy={cell / 2} r="3" fill={colors[3]} opacity="0.7" />
+          <polygon
+            points={`${cx},${cy - r * 0.55} ${cx + r * 0.55},${cy} ${cx},${cy + r * 0.55} ${cx - r * 0.55},${cy}`}
+            fill={colors[0]}
+            opacity="0.85"
+          />
         </g>,
       );
     }
   }
-  return <g>{items}</g>;
+  // Decorative horizontal banded zigzag every 100px
+  for (let y = 70; y < 500; y += 100) {
+    const zig: string[] = [];
+    for (let x = 0; x <= 400; x += 20) {
+      const offset = (x / 20) % 2 === 0 ? 0 : 8;
+      zig.push(`${x},${y + offset}`);
+    }
+    items.push(
+      <polyline
+        key={`zz-${y}`}
+        points={zig.join(" ")}
+        fill="none"
+        stroke={colors[4]}
+        strokeWidth="1.4"
+        opacity="0.55"
+      />,
+    );
+  }
+  return <g filter={`url(#weave-${id})`}>{items}</g>;
 }
 
-function KentePattern({ colors }: { colors: string[] }) {
-  const cell = 40;
-  const blocks: React.ReactNode[] = [];
+/* -------------------- Kente: blocked warp/weft color grid -------------------- */
+
+function KentePattern({ colors, id }: { colors: string[]; id: string }) {
+  const items: React.ReactNode[] = [];
+  const blockW = 80;
+  const blockH = 65;
   let i = 0;
-  for (let y = 0; y < 500; y += cell) {
-    for (let x = 0; x < 400; x += cell) {
-      const fill = colors[(i + Math.floor(y / cell)) % colors.length];
-      blocks.push(
-        <rect key={`${x}-${y}`} x={x} y={y} width={cell} height={cell} fill={fill} />,
+  for (let y = 0; y < 500; y += blockH) {
+    for (let x = 0; x < 400; x += blockW) {
+      const isWarpFaced = ((x / blockW) + (y / blockH) + i) % 2 === 0;
+      const baseColor = colors[i % colors.length];
+      items.push(
+        <rect key={`b-${x}-${y}`} x={x} y={y} width={blockW} height={blockH} fill={baseColor} />,
       );
-      if (i % 2 === 0) {
-        blocks.push(
-          <rect
-            key={`o-${x}-${y}`}
-            x={x + 6}
-            y={y + 6}
-            width={cell - 12}
-            height={cell - 12}
+      if (isWarpFaced) {
+        // Vertical fine stripes (warp-faced)
+        for (let sx = x + 4; sx < x + blockW; sx += 8) {
+          items.push(
+            <line
+              key={`v-${sx}-${y}`}
+              x1={sx}
+              y1={y}
+              x2={sx}
+              y2={y + blockH}
+              stroke={colors[(i + 2) % colors.length]}
+              strokeWidth="2"
+              opacity="0.75"
+            />,
+          );
+        }
+      } else {
+        // Horizontal weft-faced with chevron motif
+        for (let sy = y + 4; sy < y + blockH; sy += 8) {
+          items.push(
+            <line
+              key={`h-${x}-${sy}`}
+              x1={x}
+              y1={sy}
+              x2={x + blockW}
+              y2={sy}
+              stroke={colors[(i + 3) % colors.length]}
+              strokeWidth="2"
+              opacity="0.7"
+            />,
+          );
+        }
+        items.push(
+          <polygon
+            key={`chev-${x}-${y}`}
+            points={`${x + 12},${y + blockH / 2} ${x + blockW / 2},${y + 8} ${x + blockW - 12},${y + blockH / 2} ${x + blockW / 2},${y + blockH - 8}`}
             fill="none"
-            stroke={colors[3]}
+            stroke={colors[(i + 4) % colors.length]}
             strokeWidth="2"
-            opacity="0.5"
+            opacity="0.85"
           />,
         );
       }
       i++;
     }
   }
-  return <g>{blocks}</g>;
+  return <g filter={`url(#weave-${id})`}>{items}</g>;
 }
 
+/* -------------------- Lace: scalloped openwork medallions -------------------- */
+
 function LacePattern({ colors, id }: { colors: string[]; id: string }) {
-  const dots: React.ReactNode[] = [];
-  for (let y = 20; y < 500; y += 32) {
-    for (let x = 20; x < 400; x += 32) {
-      dots.push(
+  const items: React.ReactNode[] = [];
+  const stroke = pickLight(colors);
+  // Background tone on top of the base gradient
+  items.push(<rect key="ovr" width="400" height="500" fill={colors[0]} opacity="0.5" />);
+  // Floral medallions
+  const cellW = 100;
+  const cellH = 100;
+  for (let y = 0; y < 500 + cellH; y += cellH) {
+    for (let x = 0; x < 400 + cellW; x += cellW) {
+      const cx = x + cellW / 2 + ((y / cellH) % 2 === 0 ? 0 : cellW / 2);
+      const cy = y + cellH / 2;
+      // Petals
+      for (let p = 0; p < 8; p++) {
+        const a = (p / 8) * Math.PI * 2;
+        const px = cx + Math.cos(a) * 22;
+        const py = cy + Math.sin(a) * 22;
+        items.push(
+          <ellipse
+            key={`pe-${x}-${y}-${p}`}
+            cx={px}
+            cy={py}
+            rx={9}
+            ry={5}
+            transform={`rotate(${(a * 180) / Math.PI} ${px} ${py})`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="1"
+            opacity="0.75"
+          />,
+        );
+      }
+      // Inner ring
+      items.push(
         <circle
-          key={`${x}-${y}`}
-          cx={x}
-          cy={y}
-          r="6"
+          key={`ic-${x}-${y}`}
+          cx={cx}
+          cy={cy}
+          r="7"
           fill="none"
-          stroke={colors[3]}
-          strokeWidth="1.2"
-          opacity="0.65"
+          stroke={stroke}
+          strokeWidth="1"
+          opacity="0.85"
         />,
       );
-      dots.push(
-        <circle
-          key={`d-${x}-${y}`}
-          cx={x + 16}
-          cy={y + 16}
-          r="2"
-          fill={colors[3]}
-          opacity="0.7"
+      // Connecting filaments
+      items.push(
+        <path
+          key={`f-${x}-${y}`}
+          d={`M ${cx - cellW / 2} ${cy} Q ${cx} ${cy - 8} ${cx + cellW / 2} ${cy}`}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="0.6"
+          opacity="0.45"
         />,
       );
     }
   }
   return (
     <>
-      <rect width="400" height="500" fill={colors[0]} opacity="0.55" />
-      <g filter={`url(#soft-${id})`}>{dots}</g>
       <defs>
-        <filter id={`soft-${id}`}>
-          <feGaussianBlur stdDeviation="0.4" />
+        <filter id={`lace-soft-${id}`}>
+          <feGaussianBlur stdDeviation="0.35" />
         </filter>
       </defs>
+      <g filter={`url(#lace-soft-${id})`}>{items}</g>
     </>
   );
 }
 
-function CottonPattern({ colors, seed }: { colors: string[]; seed: string }) {
+/* -------------------- Cotton: hand-loomed plain weave -------------------- */
+
+function CottonPattern({
+  colors,
+  id,
+  seed,
+}: {
+  colors: string[];
+  id: string;
+  seed: string;
+}) {
   const rand = rng(seed + "cotton");
-  const lines: React.ReactNode[] = [];
-  for (let i = 0; i < 220; i++) {
-    const y = rand() * 500;
-    const len = 20 + rand() * 60;
-    const x = rand() * 400;
-    lines.push(
+  const items: React.ReactNode[] = [];
+  // Subtle plain-weave warp + weft
+  for (let y = 0; y < 500; y += 6) {
+    items.push(
       <line
-        key={i}
-        x1={x}
+        key={`h-${y}`}
+        x1="0"
         y1={y}
-        x2={x + len}
+        x2="400"
         y2={y}
+        stroke={shade(colors[0], -0.05)}
+        strokeWidth="0.6"
+        opacity="0.45"
+      />,
+    );
+  }
+  for (let x = 0; x < 400; x += 6) {
+    items.push(
+      <line
+        key={`v-${x}`}
+        x1={x}
+        y1="0"
+        x2={x}
+        y2="500"
+        stroke={shade(colors[0], 0.05)}
+        strokeWidth="0.6"
+        opacity="0.4"
+      />,
+    );
+  }
+  // Slubs
+  for (let i = 0; i < 80; i++) {
+    items.push(
+      <line
+        key={`sl-${i}`}
+        x1={rand() * 400}
+        y1={rand() * 500}
+        x2={rand() * 400 + 8}
+        y2={rand() * 500}
         stroke={colors[2]}
-        strokeWidth="1"
+        strokeWidth="1.1"
         opacity={0.25 + rand() * 0.4}
       />,
     );
   }
-  return <g>{lines}</g>;
+  // A couple of soft warm bands (kola-dyed effect)
+  for (let i = 0; i < 3; i++) {
+    const y = rand() * 500;
+    items.push(
+      <rect
+        key={`band-${i}`}
+        x="0"
+        y={y}
+        width="400"
+        height={20 + rand() * 20}
+        fill={colors[3]}
+        opacity="0.18"
+      />,
+    );
+  }
+  return <g filter={`url(#weave-${id})`}>{items}</g>;
 }
 
-function LinenPattern({ colors }: { colors: string[] }) {
-  const lines: React.ReactNode[] = [];
+/* -------------------- Linen: airy crosshatch -------------------- */
+
+function LinenPattern({ colors, id }: { colors: string[]; id: string }) {
+  const items: React.ReactNode[] = [];
   for (let y = 0; y < 500; y += 4) {
-    lines.push(
+    items.push(
       <line
         key={`h-${y}`}
         x1="0"
@@ -360,12 +798,12 @@ function LinenPattern({ colors }: { colors: string[] }) {
         y2={y}
         stroke={colors[3]}
         strokeWidth="0.5"
-        opacity="0.18"
+        opacity="0.16"
       />,
     );
   }
   for (let x = 0; x < 400; x += 4) {
-    lines.push(
+    items.push(
       <line
         key={`v-${x}`}
         x1={x}
@@ -374,9 +812,52 @@ function LinenPattern({ colors }: { colors: string[] }) {
         y2="500"
         stroke={colors[1]}
         strokeWidth="0.5"
-        opacity="0.18"
+        opacity="0.16"
       />,
     );
   }
-  return <g>{lines}</g>;
+  // A few wider warm threads
+  for (let i = 0; i < 6; i++) {
+    const x = (i / 6) * 400 + 20;
+    items.push(
+      <line
+        key={`th-${i}`}
+        x1={x}
+        y1="0"
+        x2={x}
+        y2="500"
+        stroke={colors[2]}
+        strokeWidth="1.2"
+        opacity="0.4"
+      />,
+    );
+  }
+  return <g filter={`url(#weave-${id})`}>{items}</g>;
+}
+
+/* -------------------- Helpers -------------------- */
+
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+function pickLight(colors: string[]): string {
+  let best = colors[0];
+  let bestL = relativeLuminance(colors[0]);
+  for (const c of colors) {
+    const l = relativeLuminance(c);
+    if (l > bestL) {
+      bestL = l;
+      best = c;
+    }
+  }
+  return bestL < 0.5 ? "#f3ead2" : best;
+}
+
+function pickAccent(colors: string[], avoid: string): string {
+  for (const c of colors) {
+    if (c.toLowerCase() !== avoid.toLowerCase()) return c;
+  }
+  return colors[0];
 }

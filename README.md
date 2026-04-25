@@ -28,8 +28,8 @@ Threadline collapses that loop. The catalogue is structured (heritage, palette, 
 
 - **Curated catalogue** — 30+ fabrics across 6 Nigerian heritage techniques (Adire, Ankara, Aso-oke, Akwete, Kente, George/lace), seeded from `data/fabrics.json` and `data/suppliers.json`.
 - **Procedural fabric artwork** — every listing renders as a unique SVG generated from the fabric's palette and heritage. No external image hosts required, demo loads in milliseconds even offline.
-- **AI mood-board matcher** — uploads or sample images are sent to OpenAI `gpt-4o-mini` with a strict JSON schema (palette, mood, texture, heritage guess). A deterministic ranker (CIELAB ΔE colour distance + Jaccard tag overlap + heritage and texture bonuses) returns the top 6 fabrics with per-fabric reasoning.
-- **Graceful AI fallback** — if no `OPENAI_API_KEY` is configured the API uses a built-in heuristic so the demo never blanks out, and sample mood-boards ship with a "vision hint" so judges always see deterministic, sensible matches.
+- **AI mood-board matcher** — uploads or sample images are sent to Google `gemini-2.5-flash` with a strict JSON response schema (palette, mood, texture, heritage guess). A deterministic ranker (CIELAB ΔE colour distance + Jaccard tag overlap + heritage and texture bonuses) returns the top 6 fabrics with per-fabric reasoning.
+- **Graceful AI fallback** — if no `GEMINI_API_KEY` is configured the API uses a built-in heuristic so the demo never blanks out, and sample mood-boards ship with a "vision hint" so judges always see deterministic, sensible matches.
 - **Inquiry flow with auto-drafted RFQs** — `InquiryDialog` pre-fills name, MOQ, lead time, and a polished message that references the listing. Submissions hit `/api/inquiry`, get a tracked id, and persist locally for the demo.
 - **Heritage-aware UX** — heritage badges, region pills, and palette swatches are themed per technique, so an Adire card looks different from a Kente or Akwete card at a glance.
 
@@ -39,7 +39,7 @@ Threadline collapses that loop. The catalogue is structured (heritage, palette, 
 - **TypeScript** end-to-end with `zod` schemas for AI responses and inquiry validation
 - **Tailwind CSS v4** with a custom heritage colour palette and `Fraunces` + `Inter` typography
 - **Framer Motion** for hero, dialog, and match-result transitions
-- **OpenAI `gpt-4o-mini`** for vision-to-JSON mood-board analysis (with deterministic fallback)
+- **Google `gemini-2.5-flash`** (`@google/genai`) for vision-to-JSON mood-board analysis with response schema enforcement (and a deterministic fallback)
 - **lucide-react** icons, `clsx` + `tailwind-merge` for class composition
 - **Mock data layer** — JSON seed files plus `localStorage` for RFQs (no DB, no auth)
 
@@ -50,7 +50,7 @@ Bypic/
 ├── app/
 │   ├── api/
 │   │   ├── inquiry/route.ts        # Mock RFQ endpoint
-│   │   └── match/route.ts          # OpenAI vision + ranker
+│   │   └── match/route.ts          # Gemini vision + ranker
 │   ├── about/page.tsx              # Story + Built with Cursor
 │   ├── fabrics/[id]/page.tsx       # Fabric detail
 │   ├── marketplace/page.tsx        # Filterable catalogue
@@ -66,7 +66,7 @@ Bypic/
 ├── lib/
 │   ├── data.ts                     # Catalogue access helpers
 │   ├── matching.ts                 # ΔE + Jaccard ranker, palette describer
-│   ├── openai.ts                   # gpt-4o-mini client + schema
+│   ├── gemini.ts                   # gemini-2.5-flash client + schema
 │   ├── types.ts                    # Shared types (Heritage, Fabric, …)
 │   └── utils.ts                    # cn(), formatters
 ├── public/                         # favicon + grain texture
@@ -79,7 +79,7 @@ Bypic/
 
 ```bash
 cd Bypic
-cp .env.example .env.local        # add OPENAI_API_KEY (optional — fallback works)
+cp .env.example .env.local        # add GEMINI_API_KEY (optional — fallback works)
 npm install
 npm run dev                       # http://localhost:3000
 ```
@@ -99,14 +99,14 @@ Copy `.env.example` to `.env.local` (or set in Vercel project settings):
 
 | Variable          | Required | Notes                                                                 |
 | ----------------- | -------- | --------------------------------------------------------------------- |
-| `OPENAI_API_KEY`  | optional | Enables real `gpt-4o-mini` vision analysis. Without it, the API falls back to a deterministic heuristic so the demo still works end-to-end. |
+| `GEMINI_API_KEY`  | optional | Enables real `gemini-2.5-flash` vision analysis. Get a key from [Google AI Studio](https://aistudio.google.com/apikey). Without it, the API falls back to a deterministic heuristic so the demo still works end-to-end. |
 
 ## Deployment
 
 The app is a stock Next.js 15 project and deploys to Vercel with no extra configuration:
 
 1. Import the `Bypic` directory as the project root in Vercel.
-2. Add `OPENAI_API_KEY` (optional) in *Project → Settings → Environment Variables*.
+2. Add `GEMINI_API_KEY` (optional) in *Project → Settings → Environment Variables*.
 3. Deploy — Vercel detects Next.js automatically.
 
 ## Built with Cursor AI
@@ -115,7 +115,7 @@ The entire prototype — copy, data, components, AI plumbing, and SVG fabric gen
 
 - **Scaffolding** — Cursor generated the Next.js 15 + Tailwind v4 + TypeScript skeleton, custom theme, and base primitives.
 - **Catalogue authoring** — instead of stock photos, Cursor and I co-designed the heritage-aware `FabricArtwork` SVG generator and seeded 30+ richly tagged fabrics with palettes that actually mean something to the ranker.
-- **AI matcher** — Cursor wrote the OpenAI vision prompt, the `zod` JSON schema, the CIELAB ΔE colour-distance maths, and the human-readable reasoning string used on each match card.
+- **AI matcher** — Cursor wrote the Gemini vision prompt, the response schema, the CIELAB ΔE colour-distance maths, and the human-readable reasoning string used on each match card.
 - **UX polish** — Framer Motion choreography, hydration-safe components, mobile breakpoints, and the auto-drafted RFQ message were all iterated through Cursor edits.
 - **Debugging** — Cursor's terminal + browser tooling caught a palette-averaging bug (neutrals were skewing indigo to "earth-warm"), a Next.js workspace-root warning from a stray lockfile, and a dev-tools overlay intercepting the inquiry click.
 

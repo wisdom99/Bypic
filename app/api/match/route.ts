@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { analyzeMoodBoard, hasApiKey } from "@/lib/openai";
+import { analyzeMoodBoard, hasApiKey } from "@/lib/gemini";
 import { fallbackVision, rankFabrics } from "@/lib/matching";
 import { getFabrics, getSuppliers } from "@/lib/data";
 import type { Heritage, MatchVisionResult } from "@/lib/types";
