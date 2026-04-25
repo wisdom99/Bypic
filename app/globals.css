@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #FBF7F1;
+    --color-fg: #161513;
+    --color-muted: #6B6862;
+    --color-line: #E5E3DF;
+  }
+
+  html,
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    font-feature-settings: "ss01", "cv01";
+  }
+
+  ::selection {
+    background-color: rgba(46, 56, 112, 0.18);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-charcoal-100 bg-white/70 px-3 py-1 text-xs font-medium text-charcoal-700 backdrop-blur;
+  }
+
+  .card {
+    @apply rounded-2xl border border-charcoal-100 bg-white shadow-soft;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-indigo-700 px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-charcoal-100 bg-white px-5 py-2.5 text-sm font-medium text-charcoal-700 transition hover:bg-cream-100;
+  }
+
+  .btn-terracotta {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-terracotta-500 px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-terracotta-600;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-charcoal-100 bg-white px-4 py-2.5 text-sm text-charcoal-700 placeholder:text-charcoal-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wider text-charcoal-400;
+  }
+
+  .grain-bg {
+    background-image: radial-gradient(circle at 1px 1px, rgba(20, 20, 20, 0.05) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 227, 223, 0.4) 0%,
+    rgba(229, 227, 223, 0.7) 50%,
+    rgba(229, 227, 223, 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
