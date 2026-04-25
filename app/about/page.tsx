@@ -75,6 +75,28 @@ export default function AboutPage() {
         <div className="card flex flex-col gap-4 p-10 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-terracotta-600">
+              For producers
+            </p>
+            <h2 className="mt-2 font-display text-3xl font-semibold text-charcoal-900">
+              Run a workshop? Apply for verification.
+            </h2>
+            <p className="mt-2 max-w-xl text-charcoal-400">
+              We hand-verify every producer — visiting workshops, confirming
+              provenance, and recording lead times — so designers can buy local
+              without the late-night Whatsapp hunt. Free during the prototype.
+            </p>
+          </div>
+          <Link href="/suppliers/register" className="btn-primary">
+            <BadgeCheck className="h-4 w-4" />
+            Become a verified supplier
+          </Link>
+        </div>
+      </section>
+
+      <section className="container-page py-20">
+        <div className="card flex flex-col gap-4 p-10 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-terracotta-600">
               Hackathon prototype
             </p>
             <h2 className="mt-2 font-display text-3xl font-semibold text-charcoal-900">

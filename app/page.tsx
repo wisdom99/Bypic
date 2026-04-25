@@ -112,7 +112,7 @@ export default function HomePage() {
               local without the late-night Whatsapp hunt.
             </p>
             <Link
-              href="/about"
+              href="/suppliers/register"
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-cream-50 px-5 py-2.5 text-sm font-medium text-charcoal-900 transition hover:bg-cream-100"
             >
               Become a verified supplier

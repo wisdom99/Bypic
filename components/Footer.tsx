@@ -34,12 +34,18 @@ export function Footer() {
               <p className="label">Producers</p>
               <ul className="space-y-2 text-charcoal-700">
                 <li>
-                  <Link href="/about" className="hover:text-indigo-700">
+                  <Link
+                    href="/suppliers/register"
+                    className="hover:text-indigo-700"
+                  >
                     Become a supplier
                   </Link>
                 </li>
                 <li>
-                  <Link href="/about" className="hover:text-indigo-700">
+                  <Link
+                    href="/suppliers/register"
+                    className="hover:text-indigo-700"
+                  >
                     Verification
                   </Link>
                 </li>
