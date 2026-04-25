@@ -44,11 +44,6 @@ export function FabricArtwork({
           <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.07 0" />
           <feComposite in2="SourceGraphic" operator="in" />
         </filter>
-        <filter id={`weave-${id}`}>
-          <feTurbulence type="fractalNoise" baseFrequency="0.9 0.06" numOctaves="1" seed={hashSeed(seed) + 3} />
-          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0" />
-          <feComposite in2="SourceGraphic" operator="in" />
-        </filter>
         <radialGradient id={`vignette-${id}`} cx="50%" cy="50%" r="75%">
           <stop offset="60%" stopColor="black" stopOpacity="0" />
           <stop offset="100%" stopColor="black" stopOpacity="0.35" />
@@ -130,17 +125,17 @@ function renderHeritage(
     case "Ankara":
       return <AnkaraPattern colors={c} id={id} seed={seed} />;
     case "Aso-oke":
-      return <AsoOkePattern colors={c} id={id} seed={seed} />;
+      return <AsoOkePattern colors={c} seed={seed} />;
     case "Akwete":
-      return <AkwetePattern colors={c} id={id} />;
+      return <AkwetePattern colors={c} />;
     case "Kente":
-      return <KentePattern colors={c} id={id} />;
+      return <KentePattern colors={c} />;
     case "Lace":
       return <LacePattern colors={c} id={id} />;
     case "Cotton":
-      return <CottonPattern colors={c} id={id} seed={seed} />;
+      return <CottonPattern colors={c} seed={seed} />;
     case "Linen":
-      return <LinenPattern colors={c} id={id} />;
+      return <LinenPattern colors={c} />;
     default:
       return null;
   }
@@ -337,7 +332,7 @@ function AnkaraPattern({
   });
 
   return (
-    <g filter={`url(#weave-${id})`}>
+    <g>
       {cracks}
       {eyes}
     </g>
@@ -374,9 +369,12 @@ function VliscoEye({
     points.push(ring1[i]);
     points.push(ring2[i]);
   }
-  const fillA = colors[2];
-  const fillB = colors[3];
-  const fillC = colors[1];
+  // Most contrasting colour against the background → outer petal
+  const fillA = pickContrast(colors[0], colors);
+  // A different palette colour → middle ring; falls back to a contrast tone.
+  const fillB = pickContrast(fillA, colors.filter((c) => c !== fillA).concat(colors[3]));
+  // Inner core picks an accent that's neither bg nor petal
+  const fillC = pickAccent(colors, fillA) ?? colors[1];
 
   return (
     <g>
@@ -433,20 +431,24 @@ function VliscoEye({
 
 function AsoOkePattern({
   colors,
-  id,
   seed,
 }: {
   colors: string[];
-  id: string;
   seed: string;
 }) {
   const rand = rng(seed + "asooke");
   const stripCount = 3;
   const stripW = 400 / stripCount;
   const items: React.ReactNode[] = [];
+  // Pick a metallic / contrast thread automatically — gold for dark bases,
+  // deep wine for light bases.
+  const baseL = relativeLuminance(colors[0]);
+  const metal = baseL < 0.45 ? "#d9c089" : "#3a1e1e";
+  const wide = baseL < 0.45 ? colors[2] || metal : shade(colors[0], -0.35);
+
   // Vertical strip seams (slightly darker base, with a thin gap line)
   for (let s = 0; s < stripCount; s++) {
-    const tone = s % 2 === 0 ? shade(colors[0], -0.04) : shade(colors[0], 0.02);
+    const tone = s % 2 === 0 ? shade(colors[0], -0.06) : shade(colors[0], 0.04);
     items.push(
       <rect
         key={`strip-${s}`}
@@ -467,7 +469,7 @@ function AsoOkePattern({
         y1={0}
         x2={s * stripW}
         y2={500}
-        stroke={shade(colors[0], -0.18)}
+        stroke={shade(colors[0], -0.25)}
         strokeWidth="2"
       />,
     );
@@ -479,11 +481,7 @@ function AsoOkePattern({
     const isWide = i % 11 === 0;
     const isMetal = i % 5 === 0;
     const h = isWide ? 6 + rand() * 6 : 1.4;
-    const fill = isWide
-      ? colors[1]
-      : isMetal
-        ? colors[3]
-        : shade(colors[0], 0.06);
+    const fill = isWide ? wide : isMetal ? metal : shade(colors[0], 0.1);
     items.push(
       <rect
         key={`hs-${i}`}
@@ -498,7 +496,7 @@ function AsoOkePattern({
     y += h + (isWide ? 8 + rand() * 6 : 3);
     i++;
   }
-  // Diamond/lozenge motifs on a couple of bands (shuku)
+  // Diamond/lozenge motifs on a couple of bands (shuku) — in metal accent
   const motifBands = [180, 360];
   motifBands.forEach((by, bi) => {
     for (let mx = 30; mx < 400; mx += 60) {
@@ -507,28 +505,43 @@ function AsoOkePattern({
           key={`dm-${bi}-${mx}`}
           points={`${mx},${by} ${mx + 14},${by + 12} ${mx},${by + 24} ${mx - 14},${by + 12}`}
           fill="none"
-          stroke={colors[3]}
+          stroke={metal}
           strokeWidth="1.4"
           opacity="0.85"
         />,
       );
+      items.push(
+        <circle key={`dmd-${bi}-${mx}`} cx={mx} cy={by + 12} r="2" fill={metal} opacity="0.7" />,
+      );
     }
   });
 
-  return <g filter={`url(#weave-${id})`}>{items}</g>;
+  return <g>{items}</g>;
 }
 
 /* -------------------- Akwete: diamond-and-stripe Igbo weave -------------------- */
 
-function AkwetePattern({ colors, id }: { colors: string[]; id: string }) {
+function AkwetePattern({ colors }: { colors: string[] }) {
   const items: React.ReactNode[] = [];
-  // Vertical column structure
   const cols = 6;
   const colW = 400 / cols;
+  // Two alternating column tones — one slightly darker, one slightly lighter
+  const colA = shade(colors[0], -0.05);
+  const colB = colors[1] || shade(colors[0], 0.08);
   for (let c = 0; c < cols; c++) {
-    const tone = c % 2 === 0 ? shade(colors[1], -0.05) : shade(colors[2], -0.03);
-    items.push(<rect key={`col-${c}`} x={c * colW} y={0} width={colW} height={500} fill={tone} />);
+    items.push(
+      <rect
+        key={`col-${c}`}
+        x={c * colW}
+        y={0}
+        width={colW}
+        height={500}
+        fill={c % 2 === 0 ? colA : colB}
+      />,
+    );
   }
+  const diamond = pickContrast(colors[0], colors);
+  const diamondInner = pickAccent(colors, diamond);
   // Diamond motifs in alternating columns
   for (let c = 0; c < cols; c++) {
     const isMotif = c % 2 === 1;
@@ -541,19 +554,19 @@ function AkwetePattern({ colors, id }: { colors: string[]; id: string }) {
         <g key={`d-${c}-${y}`}>
           <polygon
             points={`${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`}
-            fill={colors[3]}
+            fill={diamond}
             opacity="0.95"
           />
           <polygon
             points={`${cx},${cy - r * 0.55} ${cx + r * 0.55},${cy} ${cx},${cy + r * 0.55} ${cx - r * 0.55},${cy}`}
-            fill={colors[0]}
-            opacity="0.85"
+            fill={diamondInner}
+            opacity="0.9"
           />
         </g>,
       );
     }
   }
-  // Decorative horizontal banded zigzag every 100px
+  // Decorative horizontal banded zigzag every 100px in the contrast tone
   for (let y = 70; y < 500; y += 100) {
     const zig: string[] = [];
     for (let x = 0; x <= 400; x += 20) {
@@ -565,25 +578,25 @@ function AkwetePattern({ colors, id }: { colors: string[]; id: string }) {
         key={`zz-${y}`}
         points={zig.join(" ")}
         fill="none"
-        stroke={colors[4]}
+        stroke={diamond}
         strokeWidth="1.4"
-        opacity="0.55"
+        opacity="0.6"
       />,
     );
   }
-  return <g filter={`url(#weave-${id})`}>{items}</g>;
+  return <g>{items}</g>;
 }
 
 /* -------------------- Kente: blocked warp/weft color grid -------------------- */
 
-function KentePattern({ colors, id }: { colors: string[]; id: string }) {
+function KentePattern({ colors }: { colors: string[] }) {
   const items: React.ReactNode[] = [];
   const blockW = 80;
   const blockH = 65;
   let i = 0;
   for (let y = 0; y < 500; y += blockH) {
     for (let x = 0; x < 400; x += blockW) {
-      const isWarpFaced = ((x / blockW) + (y / blockH) + i) % 2 === 0;
+      const isWarpFaced = (Math.floor(x / blockW) + Math.floor(y / blockH)) % 2 === 0;
       const baseColor = colors[i % colors.length];
       items.push(
         <rect key={`b-${x}-${y}`} x={x} y={y} width={blockW} height={blockH} fill={baseColor} />,
@@ -634,7 +647,7 @@ function KentePattern({ colors, id }: { colors: string[]; id: string }) {
       i++;
     }
   }
-  return <g filter={`url(#weave-${id})`}>{items}</g>;
+  return <g>{items}</g>;
 }
 
 /* -------------------- Lace: scalloped openwork medallions -------------------- */
@@ -713,11 +726,9 @@ function LacePattern({ colors, id }: { colors: string[]; id: string }) {
 
 function CottonPattern({
   colors,
-  id,
   seed,
 }: {
   colors: string[];
-  id: string;
   seed: string;
 }) {
   const rand = rng(seed + "cotton");
@@ -781,12 +792,12 @@ function CottonPattern({
       />,
     );
   }
-  return <g filter={`url(#weave-${id})`}>{items}</g>;
+  return <g>{items}</g>;
 }
 
 /* -------------------- Linen: airy crosshatch -------------------- */
 
-function LinenPattern({ colors, id }: { colors: string[]; id: string }) {
+function LinenPattern({ colors }: { colors: string[] }) {
   const items: React.ReactNode[] = [];
   for (let y = 0; y < 500; y += 4) {
     items.push(
@@ -832,7 +843,7 @@ function LinenPattern({ colors, id }: { colors: string[]; id: string }) {
       />,
     );
   }
-  return <g filter={`url(#weave-${id})`}>{items}</g>;
+  return <g>{items}</g>;
 }
 
 /* -------------------- Helpers -------------------- */
@@ -860,4 +871,23 @@ function pickAccent(colors: string[], avoid: string): string {
     if (c.toLowerCase() !== avoid.toLowerCase()) return c;
   }
   return colors[0];
+}
+
+/** Pick the palette colour with the highest luminance distance from `against`.
+ *  Falls back to a cream/charcoal so motifs always read on flat palettes. */
+function pickContrast(against: string, colors: string[]): string {
+  const targetL = relativeLuminance(against);
+  let best = colors[0];
+  let bestDelta = 0;
+  for (const c of colors) {
+    const d = Math.abs(relativeLuminance(c) - targetL);
+    if (d > bestDelta) {
+      bestDelta = d;
+      best = c;
+    }
+  }
+  if (bestDelta < 0.18) {
+    return targetL < 0.5 ? "#f3ead2" : "#1a1714";
+  }
+  return best;
 }
