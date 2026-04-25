@@ -1,4 +1,12 @@
 import { getFabricById, getSupplierById } from "@/lib/data";
+import {
+  autoReleaseAtFrom,
+  canTransition,
+  computeFees,
+  generateOrderId,
+  isPipeline,
+  isRealised,
+} from "@/lib/escrow";
 import type {
   DemandFabricStat,
   DemandFeedItem,
@@ -7,6 +15,12 @@ import type {
   DemandPaletteStat,
   DemandRegionStat,
   DemandStats,
+  EscrowActor,
+  EscrowCreatePayload,
+  EscrowEvent,
+  EscrowOrder,
+  EscrowRevenueStats,
+  EscrowStatus,
   Heritage,
   Interest,
   InterestPayload,
@@ -626,4 +640,382 @@ export function listSupplierApplications(): SupplierApplication[] {
 
 export function countPendingSupplierApplications(): number {
   return supplierApplications.filter((a) => a.status === "pending").length;
+}
+
+// --- Escrow store -------------------------------------------------------
+//
+// In-memory escrow ledger. Seeded with a handful of orders across every
+// state so the dashboard, timeline, and revenue tiles look alive on first
+// load. Like the other stores in this file it's process-local — fine for
+// a hackathon prototype, swap for Postgres + Stripe Connect in production.
+
+interface EscrowSeed {
+  fabricId: string;
+  designerName: string;
+  designerEmail: string;
+  yards: number;
+  status: EscrowStatus;
+  hoursAgo: number;
+  trackingRef?: string;
+  shippingNote?: string;
+  deliveryNote?: string;
+  disputeReason?: string;
+}
+
+const ESCROW_SEED: EscrowSeed[] = [
+  {
+    fabricId: "indigo-elu",
+    designerName: "Tola Adekunle",
+    designerEmail: "studio@tola.ng",
+    yards: 32,
+    status: "released",
+    hoursAgo: 240,
+    trackingRef: "GIG-LOS-88421",
+    shippingNote: "DHL Lagos hub → Victoria Island.",
+    deliveryNote: "Beautiful indigo, exactly the swatch we approved.",
+  },
+  {
+    fabricId: "alaari-aso",
+    designerName: "Funmi Olatunji",
+    designerEmail: "funmi@olatunjicouture.com",
+    yards: 24,
+    status: "released",
+    hoursAgo: 168,
+    trackingRef: "RED-IBN-22019",
+    deliveryNote: "Loom width spot-on. Will reorder for the next bridal drop.",
+  },
+  {
+    fabricId: "linen-coral",
+    designerName: "Tunde Bakare",
+    designerEmail: "tunde@bakareresort.com",
+    yards: 60,
+    status: "delivered",
+    hoursAgo: 30,
+    trackingRef: "GIG-LOS-90112",
+    deliveryNote: "Received and inspected. 7-day window running.",
+  },
+  {
+    fabricId: "akwete-ikaki",
+    designerName: "Ngozi Okeke",
+    designerEmail: "ngozi@okeke.studio",
+    yards: 18,
+    status: "shipped",
+    hoursAgo: 8,
+    trackingRef: "ABC-ABA-44551",
+    shippingNote: "Aba → Lagos via ABC Transport, ETA Friday.",
+  },
+  {
+    fabricId: "ankara-orchid",
+    designerName: "Sade Bello",
+    designerEmail: "sade@bellostudio.com",
+    yards: 40,
+    status: "funded",
+    hoursAgo: 4,
+  },
+  {
+    fabricId: "moon-adire",
+    designerName: "Halima Yusuf",
+    designerEmail: "halima@hyatelier.com",
+    yards: 12,
+    status: "pending",
+    hoursAgo: 1,
+  },
+  {
+    fabricId: "kente-bonwire",
+    designerName: "Akua Mensah",
+    designerEmail: "akua@mensah.gh",
+    yards: 14,
+    status: "disputed",
+    hoursAgo: 56,
+    trackingRef: "DHL-ACC-71203",
+    shippingNote: "Accra → Lagos via DHL.",
+    disputeReason: "Two yards short of the agreed cut. Awaiting producer reply.",
+  },
+];
+
+function buildSeedOrder(seed: EscrowSeed, idx: number): EscrowOrder | null {
+  const fabric = getFabricById(seed.fabricId);
+  if (!fabric) return null;
+  const supplier = getSupplierById(fabric.supplierId);
+  if (!supplier) return null;
+  const fees = computeFees(seed.yards, fabric.pricePerYardNgn);
+  const created = new Date();
+  created.setHours(created.getHours() - seed.hoursAgo);
+  const id = `ESC-SEED-${(idx + 1).toString().padStart(3, "0")}`;
+
+  // Build a plausible event log for each seeded state. Each step is offset
+  // backwards from `seed.hoursAgo` so timelines render in the right order.
+  const events: EscrowEvent[] = [];
+  const stamp = (hoursAgo: number): string => {
+    const d = new Date();
+    d.setHours(d.getHours() - hoursAgo);
+    return d.toISOString();
+  };
+  const order: EscrowOrder = {
+    id,
+    fabricId: fabric.id,
+    fabricName: fabric.name,
+    heritage: fabric.heritage,
+    region: fabric.region,
+    palette: fabric.palette,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    designerName: seed.designerName,
+    designerEmail: seed.designerEmail,
+    yards: seed.yards,
+    pricePerYardNgn: fabric.pricePerYardNgn,
+    fees,
+    status: seed.status,
+    createdAt: stamp(seed.hoursAgo),
+    trackingRef: seed.trackingRef,
+    shippingNote: seed.shippingNote,
+    deliveryNote: seed.deliveryNote,
+    disputeReason: seed.disputeReason,
+    events,
+  };
+
+  events.push({
+    at: order.createdAt,
+    status: "pending",
+    actor: "designer",
+    note: "Order drafted with the producer.",
+  });
+
+  if (seed.status === "pending") return order;
+
+  const fundedHoursAgo = Math.max(0, seed.hoursAgo - 1);
+  order.fundedAt = stamp(fundedHoursAgo);
+  events.push({
+    at: order.fundedAt,
+    status: "funded",
+    actor: "designer",
+    note: "Designer funded escrow. Threadline is holding the funds.",
+  });
+
+  if (seed.status === "funded") return order;
+
+  const shippedHoursAgo = Math.max(0, fundedHoursAgo - 6);
+  order.shippedAt = stamp(shippedHoursAgo);
+  events.push({
+    at: order.shippedAt,
+    status: "shipped",
+    actor: "producer",
+    note: seed.shippingNote ?? "Producer marked the order shipped.",
+  });
+
+  if (seed.status === "shipped") return order;
+
+  if (seed.status === "disputed") {
+    order.disputedAt = stamp(Math.max(0, shippedHoursAgo - 6));
+    events.push({
+      at: order.disputedAt,
+      status: "disputed",
+      actor: "designer",
+      note: seed.disputeReason ?? "Designer raised a dispute.",
+    });
+    return order;
+  }
+
+  const deliveredHoursAgo = Math.max(0, shippedHoursAgo - 18);
+  order.deliveredAt = stamp(deliveredHoursAgo);
+  order.autoReleaseAt = autoReleaseAtFrom(new Date(order.deliveredAt));
+  events.push({
+    at: order.deliveredAt,
+    status: "delivered",
+    actor: "designer",
+    note: seed.deliveryNote ?? "Designer confirmed receipt.",
+  });
+
+  if (seed.status === "delivered") return order;
+
+  if (seed.status === "released") {
+    const releasedHoursAgo = Math.max(0, deliveredHoursAgo - 6);
+    order.releasedAt = stamp(releasedHoursAgo);
+    events.push({
+      at: order.releasedAt,
+      status: "released",
+      actor: "threadline",
+      note: `Funds released to ${supplier.name}. Threadline kept ₦${fees.totalFeeNgn.toLocaleString("en-NG")} (${(
+        (fees.totalFeeNgn / fees.subtotalNgn) *
+        100
+      ).toFixed(1)}%).`,
+    });
+    return order;
+  }
+
+  return order;
+}
+
+const escrowOrders: EscrowOrder[] = ESCROW_SEED.map(buildSeedOrder).filter(
+  (o): o is EscrowOrder => o !== null,
+);
+
+export function listEscrowOrders(): EscrowOrder[] {
+  return escrowOrders
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+}
+
+export function getEscrowOrder(id: string): EscrowOrder | undefined {
+  return escrowOrders.find((o) => o.id === id);
+}
+
+export function createEscrowOrder(
+  payload: EscrowCreatePayload,
+): EscrowOrder | { error: string } {
+  const fabric = getFabricById(payload.fabricId);
+  if (!fabric) return { error: "Fabric not found" };
+  const supplier = getSupplierById(fabric.supplierId);
+  if (!supplier) return { error: "Supplier not found" };
+  if (payload.yards < fabric.minOrderYards) {
+    return {
+      error: `Below minimum order — ${fabric.name} requires ${fabric.minOrderYards} yards.`,
+    };
+  }
+
+  const fees = computeFees(payload.yards, fabric.pricePerYardNgn);
+  const now = new Date().toISOString();
+  const order: EscrowOrder = {
+    id: generateOrderId(),
+    fabricId: fabric.id,
+    fabricName: fabric.name,
+    heritage: fabric.heritage,
+    region: fabric.region,
+    palette: fabric.palette,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    designerName: payload.designerName,
+    designerEmail: payload.designerEmail,
+    yards: payload.yards,
+    pricePerYardNgn: fabric.pricePerYardNgn,
+    fees,
+    status: "pending",
+    createdAt: now,
+    events: [
+      {
+        at: now,
+        status: "pending",
+        actor: "designer",
+        note: "Order drafted. Awaiting payment to escrow.",
+      },
+    ],
+  };
+  escrowOrders.unshift(order);
+  return order;
+}
+
+interface TransitionPayload {
+  to: EscrowStatus;
+  actor: EscrowActor;
+  note?: string;
+  trackingRef?: string;
+  shippingNote?: string;
+  deliveryNote?: string;
+  disputeReason?: string;
+}
+
+export function transitionEscrowOrder(
+  id: string,
+  payload: TransitionPayload,
+): EscrowOrder | { error: string } {
+  const order = escrowOrders.find((o) => o.id === id);
+  if (!order) return { error: "Order not found" };
+  if (!canTransition(order.status, payload.to)) {
+    return {
+      error: `Cannot move from ${order.status} to ${payload.to}`,
+    };
+  }
+
+  const now = new Date().toISOString();
+  order.status = payload.to;
+  order.events.push({
+    at: now,
+    status: payload.to,
+    actor: payload.actor,
+    note: payload.note,
+  });
+
+  switch (payload.to) {
+    case "funded":
+      order.fundedAt = now;
+      break;
+    case "shipped":
+      order.shippedAt = now;
+      if (payload.trackingRef) order.trackingRef = payload.trackingRef;
+      if (payload.shippingNote) order.shippingNote = payload.shippingNote;
+      break;
+    case "delivered":
+      order.deliveredAt = now;
+      order.autoReleaseAt = autoReleaseAtFrom(new Date(now));
+      if (payload.deliveryNote) order.deliveryNote = payload.deliveryNote;
+      break;
+    case "released":
+      order.releasedAt = now;
+      break;
+    case "disputed":
+      order.disputedAt = now;
+      if (payload.disputeReason) order.disputeReason = payload.disputeReason;
+      break;
+    case "refunded":
+      order.refundedAt = now;
+      break;
+    case "cancelled":
+      order.cancelledAt = now;
+      break;
+  }
+
+  return order;
+}
+
+export function getEscrowRevenueStats(): EscrowRevenueStats {
+  const countByStatus: Record<EscrowStatus, number> = {
+    pending: 0,
+    funded: 0,
+    shipped: 0,
+    delivered: 0,
+    released: 0,
+    disputed: 0,
+    refunded: 0,
+    cancelled: 0,
+  };
+  let totalGmvNgn = 0;
+  let fundsHeldNgn = 0;
+  let paidOutNgn = 0;
+  let platformRevenueNgn = 0;
+  let pipelineRevenueNgn = 0;
+
+  for (const o of escrowOrders) {
+    countByStatus[o.status] += 1;
+    if (
+      o.status === "pending" ||
+      o.status === "cancelled" ||
+      o.status === "refunded"
+    ) {
+      // Pending and refunded orders don't count toward GMV.
+      // Refunded shows up in countByStatus only.
+      continue;
+    }
+    totalGmvNgn += o.fees.subtotalNgn;
+    if (isPipeline(o.status)) {
+      fundsHeldNgn += o.fees.totalChargedNgn;
+      pipelineRevenueNgn += o.fees.totalFeeNgn;
+    }
+    if (isRealised(o.status)) {
+      paidOutNgn += o.fees.producerPayoutNgn;
+      platformRevenueNgn += o.fees.totalFeeNgn;
+    }
+  }
+
+  return {
+    totalOrders: escrowOrders.length,
+    totalGmvNgn,
+    fundsHeldNgn,
+    paidOutNgn,
+    platformRevenueNgn,
+    pipelineRevenueNgn,
+    countByStatus,
+  };
 }

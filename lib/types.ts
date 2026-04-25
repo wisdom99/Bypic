@@ -232,3 +232,100 @@ export interface SupplierApplicationConfirmation {
   queuePosition: number;
   estimatedReviewDays: number;
 }
+
+// --- Escrow ---------------------------------------------------------------
+//
+// Designers place a secure order. Threadline holds the funds until the
+// producer ships and the designer confirms. We charge a 4% protection fee
+// (2.5% transaction + 1.5% escrow) on every transaction — that's how the
+// platform makes money and how we underwrite buyer protection.
+
+export type EscrowStatus =
+  | "pending" // created, awaiting buyer to fund
+  | "funded" // funds held by Threadline; producer to ship
+  | "shipped" // producer marked shipped (with tracking)
+  | "delivered" // buyer confirmed receipt; pending release window
+  | "released" // funds paid out to producer (terminal)
+  | "disputed" // buyer raised an issue; held for mediation
+  | "refunded" // funds returned to buyer (terminal)
+  | "cancelled"; // cancelled before funding (terminal)
+
+export type EscrowActor = "designer" | "producer" | "threadline" | "system";
+
+export interface EscrowEvent {
+  at: string;
+  status: EscrowStatus;
+  actor: EscrowActor;
+  note?: string;
+}
+
+export interface EscrowFeeBreakdown {
+  subtotalNgn: number;
+  transactionFeeNgn: number;
+  escrowFeeNgn: number;
+  totalFeeNgn: number;
+  totalChargedNgn: number;
+  producerPayoutNgn: number;
+  transactionFeeRate: number;
+  escrowFeeRate: number;
+}
+
+export interface EscrowOrder {
+  id: string;
+  fabricId: string;
+  fabricName: string;
+  heritage: Heritage;
+  region: NigerianHub;
+  palette: string[];
+  supplierId: string;
+  supplierName: string;
+  designerName: string;
+  designerEmail: string;
+  yards: number;
+  pricePerYardNgn: number;
+  fees: EscrowFeeBreakdown;
+  status: EscrowStatus;
+  createdAt: string;
+  fundedAt?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+  releasedAt?: string;
+  disputedAt?: string;
+  refundedAt?: string;
+  cancelledAt?: string;
+  autoReleaseAt?: string;
+  trackingRef?: string;
+  shippingNote?: string;
+  deliveryNote?: string;
+  disputeReason?: string;
+  events: EscrowEvent[];
+}
+
+export interface EscrowQuotePayload {
+  fabricId: string;
+  yards: number;
+}
+
+export interface EscrowCreatePayload {
+  fabricId: string;
+  designerName: string;
+  designerEmail: string;
+  yards: number;
+}
+
+export interface EscrowConfirmation {
+  id: string;
+  createdAt: string;
+  status: EscrowStatus;
+  fees: EscrowFeeBreakdown;
+}
+
+export interface EscrowRevenueStats {
+  totalOrders: number;
+  totalGmvNgn: number; // gross merchandise value
+  fundsHeldNgn: number; // currently in escrow
+  paidOutNgn: number; // released to producers
+  platformRevenueNgn: number; // fees collected on released orders
+  pipelineRevenueNgn: number; // fees on funded/shipped/delivered (not yet realised)
+  countByStatus: Record<EscrowStatus, number>;
+}

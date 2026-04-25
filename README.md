@@ -16,16 +16,27 @@ A Lagos-based designer trying to source 30 yards of indigo Adire today usually h
 
 Threadline collapses that loop. The catalogue is structured (heritage, palette, mood, MOQ, lead time, region), the suppliers are profiled with verification badges, and the AI matcher turns "this is the vibe" into "here are three fabrics that match it" in under five seconds.
 
+## Pitch deck
+
+The pitch deck is shipped as a live, full-screen route inside the app: open
+[`/pitch`](http://localhost:3000/pitch) and present from the browser. Use
+`←` / `→` (or `Space`) to navigate, `1`–`9` to jump, and `Home` / `End` to
+snap to the first or last slide. The deck reuses the same heritage design
+system, `FabricArtwork` SVG generator, and Framer Motion choreography as the
+rest of the product, so the pitch *is* the demo.
+
 ## Demo script (90 seconds)
 
 1. **Land on the home page.** Read the hero promise and scroll past the procedurally generated fabric tiles representing each heritage.
 2. **Open `/marketplace`.** Filter by heritage (e.g. *Adire*) and region (e.g. *Abeokuta*). Notice price/MOQ controls, lead-time badges, and the heritage tints on each card.
 3. **Click an Adire fabric.** Read the supplier story, palette swatches, and order details. Click **Send inquiry** to see the auto-drafted RFQ, edit a field, and submit. The success view shows a tracked RFQ id (also persisted to `localStorage`).
 4. **Click *Try AI Match* in the navbar.** Pick the *Indigo dusk* sample mood-board (or upload one). Watch the vision summary populate (palette, mood, heritage guess) and the ranked matches arrive with per-fabric reasoning, score breakdowns, and direct *send inquiry* paths.
-5. **Open `/about`.** Read the *Built with Cursor AI* notes describing how the prototype was put together.
+5. **Click *Place secure order*** on a fabric detail page. Watch the escrow dialog price the order live (subtotal + 4% protection fee + producer payout), pay it into escrow, and land you on `/escrow/[id]` where you can mark the producer as shipping, confirm delivery, release funds, or open a dispute. Then visit `/escrow` to see the live revenue ledger across every order in flight.
+6. **Open `/about`.** Read the *Built with Cursor AI* notes describing how the prototype was put together.
 
 ## Feature highlights
 
+- **Escrow & buyer protection** — every order moves through a five-stage escrow flow (`pending → funded → shipped → delivered → released`), with `disputed`, `refunded`, and `cancelled` branches. Designers fund the order, Threadline holds the money, and the producer is only paid out on confirmation. We charge a transparent **2.5% transaction + 1.5% escrow protection = 4% buyer-side fee** — that's the platform's revenue line on every transaction. The `/escrow` ledger surfaces revenue, funds held, and producer payouts in real time.
 - **Curated catalogue** — 30+ fabrics across 6 Nigerian heritage techniques (Adire, Ankara, Aso-oke, Akwete, Kente, George/lace), seeded from `data/fabrics.json` and `data/suppliers.json`.
 - **Procedural fabric artwork** — every listing renders as a unique SVG generated from the fabric's palette and heritage. No external image hosts required, demo loads in milliseconds even offline.
 - **AI mood-board matcher** — uploads or sample images are sent to Google `gemini-2.5-flash` with a strict JSON response schema (palette, mood, texture, heritage guess). A deterministic ranker (CIELAB ΔE colour distance + Jaccard tag overlap + heritage and texture bonuses) returns the top 6 fabrics with per-fabric reasoning.
@@ -49,31 +60,81 @@ Threadline collapses that loop. The catalogue is structured (heritage, palette, 
 Bypic/
 ├── app/
 │   ├── api/
-│   │   ├── inquiry/route.ts        # Mock RFQ endpoint
-│   │   └── match/route.ts          # Gemini vision + ranker
-│   ├── about/page.tsx              # Story + Built with Cursor
-│   ├── fabrics/[id]/page.tsx       # Fabric detail
-│   ├── marketplace/page.tsx        # Filterable catalogue
-│   ├── match/page.tsx              # AI mood-board matcher
-│   ├── suppliers/[id]/page.tsx     # Supplier profile
-│   ├── globals.css                 # Tailwind layers + tokens
-│   ├── layout.tsx                  # Navbar + Footer shell
-│   └── page.tsx                    # Landing page
-├── components/                     # Hero, FabricCard, InquiryDialog, MoodboardUploader, …
+│   │   ├── escrow/route.ts            # Create + list escrow orders
+│   │   ├── escrow/[id]/route.ts       # Get order + state transitions
+│   │   ├── escrow/quote/route.ts      # Live fee quote for the order dialog
+│   │   ├── inquiry/route.ts           # Mock RFQ endpoint
+│   │   └── match/route.ts             # Gemini vision + ranker
+│   ├── about/page.tsx                 # Story + Built with Cursor
+│   ├── escrow/page.tsx                # Escrow ledger + revenue dashboard
+│   ├── escrow/[id]/page.tsx           # Single order timeline + actions
+│   ├── fabrics/[id]/page.tsx          # Fabric detail
+│   ├── marketplace/page.tsx           # Filterable catalogue
+│   ├── match/page.tsx                 # AI mood-board matcher
+│   ├── suppliers/[id]/page.tsx        # Supplier profile
+│   ├── globals.css                    # Tailwind layers + tokens
+│   ├── layout.tsx                     # Navbar + Footer shell
+│   └── page.tsx                       # Landing page
+├── components/                        # Hero, FabricCard, InquiryDialog, EscrowDialog, EscrowTimeline, …
 ├── data/
-│   ├── fabrics.json                # 30+ fabrics
-│   └── suppliers.json              # 10 suppliers
+│   ├── fabrics.json                   # 30+ fabrics
+│   └── suppliers.json                 # 10 suppliers
 ├── lib/
-│   ├── data.ts                     # Catalogue access helpers
-│   ├── matching.ts                 # ΔE + Jaccard ranker, palette describer
-│   ├── gemini.ts                   # gemini-2.5-flash client + schema
-│   ├── types.ts                    # Shared types (Heritage, Fabric, …)
-│   └── utils.ts                    # cn(), formatters
-├── public/                         # favicon + grain texture
+│   ├── data.ts                        # Catalogue access helpers
+│   ├── escrow.ts                      # Fee math + state machine + tone tokens
+│   ├── matching.ts                    # ΔE + Jaccard ranker, palette describer
+│   ├── gemini.ts                      # gemini-2.5-flash client + schema
+│   ├── store.ts                       # In-memory interest, supplier, escrow stores
+│   ├── types.ts                       # Shared types (Heritage, Fabric, EscrowOrder, …)
+│   └── utils.ts                       # cn(), formatters
+├── public/                            # favicon + grain texture
 ├── tailwind.config.ts
 ├── next.config.mjs
 └── package.json
 ```
+
+## Escrow & monetisation
+
+The escrow flow is the trust layer of the marketplace and the platform's
+revenue line in one. Live at [`/escrow`](http://localhost:3000/escrow).
+
+**How it works**
+
+1. A designer hits *Place secure order* on a fabric detail page.
+2. Threadline charges them `subtotal + 4%` and **holds the funds** — the
+   producer cannot withdraw yet.
+3. The producer marks the order *shipped* with a tracking reference.
+4. The designer *confirms delivery* after inspecting the cut.
+5. Funds are *released* to the producer, minus Threadline's 4% take.
+6. If anything goes wrong, the designer can *open a dispute*. Threadline
+   mediates and either *releases* or *refunds*. Delivered orders auto-release
+   after a 7-day inspection window.
+
+**Fee model**
+
+| Component                     | Rate     | Who pays  | Who receives  |
+| ----------------------------- | -------- | --------- | ------------- |
+| Order subtotal                | yards × price/yard | Designer | Producer      |
+| Threadline transaction fee    | **2.5%** | Designer  | Threadline    |
+| Threadline escrow protection  | **1.5%** | Designer  | Threadline    |
+| **Total platform take**       | **4.0%** | —         | **Threadline**|
+
+The producer always receives 100% of the listed subtotal — the protection
+fee is layered on top of the buyer's price so quoted economics for makers
+never change.
+
+**Why this protects the ecosystem**
+
+- *Sourcing* — designers stop paying 50% upfront to producers they've never
+  met. They commit to a transparent, refundable hold instead.
+- *Selling* — producers see real funds locked in before they cut, killing
+  the "ghost order" problem and removing chargeback risk.
+- *Trust* — every transition is recorded as an immutable event on the
+  order; the dashboard at `/escrow` shows funds held, paid out, platform
+  revenue, and pipeline revenue at a glance.
+
+The store is in-memory for the demo (see `lib/store.ts`); production swaps
+this for Postgres + a Stripe Connect / Paystack split-disbursement integration.
 
 ## Local development
 

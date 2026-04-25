@@ -8,18 +8,22 @@ import {
   BellRing,
   Boxes,
   Clock,
+  Lock,
   MapPin,
   PackageCheck,
   Send,
+  ShieldCheck,
   Sparkles,
   Star,
 } from "lucide-react";
 import type { Fabric, Supplier } from "@/lib/types";
+import { TOTAL_FEE_RATE } from "@/lib/escrow";
 import { cn, formatLeadTime, formatNaira } from "@/lib/utils";
 import { HeritageBadge } from "./HeritageBadge";
 import { PaletteSwatches } from "./PaletteSwatches";
 import { InquiryDialog } from "./InquiryDialog";
 import { InterestDialog } from "./InterestDialog";
+import { EscrowDialog } from "./EscrowDialog";
 import { FabricCard } from "./FabricCard";
 import { FabricArtwork } from "./FabricArtwork";
 
@@ -36,6 +40,7 @@ export function FabricDetailClient({
 }) {
   const [open, setOpen] = useState(false);
   const [interestOpen, setInterestOpen] = useState(false);
+  const [escrowOpen, setEscrowOpen] = useState(false);
 
   const stockLevel: "out" | "low" | "ok" =
     fabric.inStockYards < fabric.minOrderYards
@@ -175,8 +180,15 @@ export function FabricDetailClient({
                 <>
                   <button
                     type="button"
-                    onClick={() => setOpen(true)}
+                    onClick={() => setEscrowOpen(true)}
                     className="btn-primary"
+                  >
+                    <Lock className="h-4 w-4" /> Place secure order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="btn-ghost"
                   >
                     <Send className="h-4 w-4" /> Send inquiry
                   </button>
@@ -193,6 +205,19 @@ export function FabricDetailClient({
                 <Sparkles className="h-4 w-4" /> Find similar by mood
               </Link>
             </div>
+            {stockLevel !== "out" && (
+              <div className="mt-2 flex items-start gap-2 rounded-2xl border border-indigo-100 bg-indigo-50/50 px-3 py-2.5 text-xs text-indigo-700">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                <p className="text-charcoal-700">
+                  <span className="font-medium text-indigo-700">
+                    Threadline Protected.
+                  </span>{" "}
+                  Funds are held in escrow until you confirm the fabric. We
+                  keep {(TOTAL_FEE_RATE * 100).toFixed(1)}% of the order total
+                  to underwrite the guarantee.
+                </p>
+              </div>
+            )}
           </div>
 
           <Link
@@ -264,6 +289,12 @@ export function FabricDetailClient({
         fabric={fabric}
         supplier={supplier}
         shortfallContext={stockLevel === "out"}
+      />
+      <EscrowDialog
+        open={escrowOpen}
+        onClose={() => setEscrowOpen(false)}
+        fabric={fabric}
+        supplier={supplier}
       />
     </div>
   );

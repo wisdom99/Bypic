@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/match", label: "Match by Mood" },
+  { href: "/escrow", label: "Escrow" },
   { href: "/producers", label: "For Producers" },
   { href: "/about", label: "About" },
 ];

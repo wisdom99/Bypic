@@ -28,6 +28,11 @@ export function Footer() {
                     Match by mood
                   </Link>
                 </li>
+                <li>
+                  <Link href="/escrow" className="hover:text-indigo-700">
+                    Escrow protection
+                  </Link>
+                </li>
               </ul>
             </div>
             <div>
