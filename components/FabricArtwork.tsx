@@ -96,6 +96,12 @@ function rng(seed: string) {
   };
 }
 
+/** Round to 3 decimals so trig-derived coordinates serialise identically on
+ *  server and client, preventing SSR/CSR hydration mismatches. */
+function r3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 /** Mix-and-shade helpers (work on hex). */
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
@@ -237,12 +243,12 @@ function adireMotif(
       for (let a = 0; a < 16; a++) {
         const ang = (a / 16) * Math.PI * 2;
         const len = a % 2 === 0 ? r : r * 0.45;
-        pts.push(`${cx + Math.cos(ang) * len},${cy + Math.sin(ang) * len}`);
+        pts.push(`${r3(cx + Math.cos(ang) * len)},${r3(cy + Math.sin(ang) * len)}`);
       }
       return (
         <g>
           <polygon points={pts.join(" ")} {...stroke} />
-          <circle cx={cx} cy={cy} r={r * 0.18} fill={resist} opacity="0.55" />
+          <circle cx={cx} cy={cy} r={r3(r * 0.18)} fill={resist} opacity="0.55" />
         </g>
       );
     }
@@ -357,10 +363,10 @@ function VliscoEye({
   const ring2: string[] = [];
   for (let i = 0; i < petals; i++) {
     const a = (i / petals) * Math.PI * 2;
-    const x1 = cx + Math.cos(a) * r;
-    const y1 = cy + Math.sin(a) * r;
-    const x2 = cx + Math.cos(a + Math.PI / petals) * r * 0.78;
-    const y2 = cy + Math.sin(a + Math.PI / petals) * r * 0.78;
+    const x1 = r3(cx + Math.cos(a) * r);
+    const y1 = r3(cy + Math.sin(a) * r);
+    const x2 = r3(cx + Math.cos(a + Math.PI / petals) * r * 0.78);
+    const y2 = r3(cy + Math.sin(a + Math.PI / petals) * r * 0.78);
     ring1.push(`${x1},${y1}`);
     ring2.push(`${x2},${y2}`);
   }
@@ -381,26 +387,26 @@ function VliscoEye({
       {/* Outer scalloped petal */}
       <polygon points={points.join(" ")} fill={fillA} opacity="0.92" />
       {/* Middle ring */}
-      <circle cx={cx} cy={cy} r={r * 0.62} fill={fillB} opacity="0.95" />
+      <circle cx={cx} cy={cy} r={r3(r * 0.62)} fill={fillB} opacity="0.95" />
       {/* Inner core */}
-      {variant === 0 && <circle cx={cx} cy={cy} r={r * 0.32} fill={fillC} />}
+      {variant === 0 && <circle cx={cx} cy={cy} r={r3(r * 0.32)} fill={fillC} />}
       {variant === 1 && (
         <>
-          <circle cx={cx} cy={cy} r={r * 0.32} fill={fillC} />
-          <circle cx={cx} cy={cy} r={r * 0.18} fill={fillA} />
+          <circle cx={cx} cy={cy} r={r3(r * 0.32)} fill={fillC} />
+          <circle cx={cx} cy={cy} r={r3(r * 0.18)} fill={fillA} />
         </>
       )}
       {variant === 2 && (
         <g>
-          <circle cx={cx} cy={cy} r={r * 0.34} fill={fillC} />
+          <circle cx={cx} cy={cy} r={r3(r * 0.34)} fill={fillC} />
           {Array.from({ length: 8 }).map((_, i) => {
             const a = (i / 8) * Math.PI * 2;
             return (
               <circle
                 key={i}
-                cx={cx + Math.cos(a) * r * 0.34}
-                cy={cy + Math.sin(a) * r * 0.34}
-                r={r * 0.07}
+                cx={r3(cx + Math.cos(a) * r * 0.34)}
+                cy={r3(cy + Math.sin(a) * r * 0.34)}
+                r={r3(r * 0.07)}
                 fill={fillA}
                 opacity="0.85"
               />
@@ -415,10 +421,10 @@ function VliscoEye({
           return (
             <line
               key={i}
-              x1={cx + Math.cos(a) * r * 0.35}
-              y1={cy + Math.sin(a) * r * 0.35}
-              x2={cx + Math.cos(a) * r * 0.6}
-              y2={cy + Math.sin(a) * r * 0.6}
+              x1={r3(cx + Math.cos(a) * r * 0.35)}
+              y1={r3(cy + Math.sin(a) * r * 0.35)}
+              x2={r3(cx + Math.cos(a) * r * 0.6)}
+              y2={r3(cy + Math.sin(a) * r * 0.6)}
             />
           );
         })}
@@ -667,8 +673,9 @@ function LacePattern({ colors, id }: { colors: string[]; id: string }) {
       // Petals
       for (let p = 0; p < 8; p++) {
         const a = (p / 8) * Math.PI * 2;
-        const px = cx + Math.cos(a) * 22;
-        const py = cy + Math.sin(a) * 22;
+        const px = r3(cx + Math.cos(a) * 22);
+        const py = r3(cy + Math.sin(a) * 22);
+        const angDeg = r3((a * 180) / Math.PI);
         items.push(
           <ellipse
             key={`pe-${x}-${y}-${p}`}
@@ -676,7 +683,7 @@ function LacePattern({ colors, id }: { colors: string[]; id: string }) {
             cy={py}
             rx={9}
             ry={5}
-            transform={`rotate(${(a * 180) / Math.PI} ${px} ${py})`}
+            transform={`rotate(${angDeg} ${px} ${py})`}
             fill="none"
             stroke={stroke}
             strokeWidth="1"
